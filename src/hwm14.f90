@@ -1,63 +1,45 @@
-!!!
-!!!  Horizontal Wind Model 14
-!!!
-!!!  AUTHORS
-!!!    Douglas Drob  (0 to ~450+ km, quite-time)
-!!!    John Emmert   (disturbance winds, DWM Emmert et al., (2008))
-!!!    Geospace Science and Technology Branch
-!!!    Space Science Division
-!!!    Naval Research Laboratory
-!!!    4555 Overlook Ave.
-!!!    Washington, DC 20375
-!!!
-!!!  Point of Contact
-!!!   douglas.drob@nrl.navy.mil
-!!!
-!!!   DATE
-!!!    July 8, 2014
-!!!
-!!!
-!!!
-!!!================================================================================
-!!! Input arguments:
-!!!        iyd - year and day as yyddd
-!!!        sec - ut(sec)
-!!!        alt - altitude(km)
-!!!        glat - geodetic latitude(deg)
-!!!        glon - geodetic longitude(deg)
-!!!        stl - not used
-!!!        f107a - not used
-!!!        f107 - not used
-!!!        ap - two element array with
-!!!             ap(1) = not used
-!!!             ap(2) = current 3hr ap index
-!!!
-!!! Output argument:
-!!!        w(1) = meridional wind (m/sec + northward)
-!!!        w(2) = zonal wind (m/sec + eastward)
-!!!
-!!!================================================================================
+!>
+!  Horizontal Wind Model 14
+!
+!  AUTHORS
+!    Douglas Drob  (0 to ~450+ km, quite-time)
+!    John Emmert   (disturbance winds, DWM Emmert et al., (2008))
+!    Geospace Science and Technology Branch
+!    Space Science Division
+!    Naval Research Laboratory
+!    4555 Overlook Ave.
+!    Washington, DC 20375
+!
+!  Point of Contact
+!   douglas.drob@nrl.navy.mil
+!
+!   DATE
+!    July 8, 2014
 
+module hwm14_module
 
-module hwm
+    implicit none
 
-    integer(4)           :: nmaxhwm = 0        ! maximum degree hwmqt
-    integer(4)           :: omaxhwm = 0        ! maximum order hwmqt
-    integer(4)           :: nmaxdwm = 0        ! maximum degree hwmqt
-    integer(4)           :: mmaxdwm = 0        ! maximum order hwmqt
-    integer(4)           :: nmaxqdc = 0        ! maximum degree of coordinate coversion
-    integer(4)           :: mmaxqdc = 0        ! maximum order of coordinate coversion
-    integer(4)           :: nmaxgeo = 0        ! maximum of nmaxhwm, nmaxqd
-    integer(4)           :: mmaxgeo = 0        ! maximum of omaxhwm, nmaxqd
+    contains
 
-    real(8),allocatable  :: gpbar(:,:),gvbar(:,:),gwbar(:,:) ! alfs for geo coordinates
-    real(8),allocatable  :: spbar(:,:),svbar(:,:),swbar(:,:) ! alfs MLT calculation
-
-    real(8)              :: glatalf = -1.d32
-
-    logical              :: hwminit = .true.
-
-end module hwm
+!================================================================================
+!>
+! Input arguments:
+!        iyd - year and day as yyddd
+!        sec - ut(sec)
+!        alt - altitude(km)
+!        glat - geodetic latitude(deg)
+!        glon - geodetic longitude(deg)
+!        stl - not used
+!        f107a - not used
+!        f107 - not used
+!        ap - two element array with
+!             ap(1) = not used
+!             ap(2) = current 3hr ap index
+!
+! Output argument:
+!        w(1) = meridional wind (m/sec + northward)
+!        w(2) = zonal wind (m/sec + eastward)
 
 subroutine hwm14(iyd,sec,alt,glat,glon,stl,f107a,f107,ap,w)
 
@@ -81,195 +63,6 @@ subroutine hwm14(iyd,sec,alt,glat,glon,stl,f107a,f107,ap,w)
     return
 
 end subroutine hwm14
-
-! ################################################################################
-! Portable utility to compute vector spherical harmonical harmonic basis functions
-! ################################################################################
-
-module alf
-
-    implicit none
-
-    integer(4)              :: nmax0,mmax0
-
-    ! static normalizational coeffiecents
-
-    real(8), allocatable    :: anm(:,:),bnm(:,:),dnm(:,:)
-    real(8), allocatable    :: cm(:),en(:)
-    real(8), allocatable    :: marr(:),narr(:)
-
-contains
-
-    ! -------------------------------------------------------------
-    ! routine to compute vector spherical harmonic basis functions
-    ! -------------------------------------------------------------
-
-    subroutine alfbasis(nmax,mmax,theta,P,V,W)
-
-        implicit none
-
-        integer(4), intent(in)  :: nmax, mmax
-        real(8), intent(in)     :: theta
-        real(8), intent(out)    :: P(0:nmax,0:mmax)
-        real(8), intent(out)    :: V(0:nmax,0:mmax)
-        real(8), intent(out)    :: W(0:nmax,0:mmax)
-
-        integer(8)              :: n, m
-        real(8)                 :: x, y
-        real(8), parameter      :: p00 = 0.70710678118654746d0
-
-        P(0,0) = p00
-        x = dcos(theta)
-        y = dsin(theta)
-        do m = 1, mmax
-            W(m,m) = cm(m) * P(m-1,m-1)
-            P(m,m) = y * en(m) * W(m,m)
-            do n = m+1, nmax
-                W(n,m) = anm(n,m) * x * W(n-1,m) - bnm(n,m) * W(n-2,m)
-                P(n,m) = y * en(n) * W(n,m)
-                V(n,m) = narr(n) * x * W(n,m) - dnm(n,m) * W(n-1,m)
-                W(n-2,m) = marr(m) * W(n-2,m)
-            enddo
-            W(nmax-1,m) = marr(m) * W(nmax-1,m)
-            W(nmax,m) = marr(m) * W(nmax,m)
-            V(m,m) = x * W(m,m)
-        enddo
-        P(1,0) = anm(1,0) * x * P(0,0)
-        V(1,0) = -P(1,1)
-        do n = 2, nmax
-            P(n,0) = anm(n,0) * x * P(n-1,0) - bnm(n,0) * P(n-2,0)
-            V(n,0) = -P(n,1)
-        enddo
-
-        return
-
-    end subroutine alfbasis
-
-    ! -----------------------------------------------------
-    ! routine to compute static normalization coeffiecents
-    ! -----------------------------------------------------
-
-    subroutine initalf(nmaxin,mmaxin)
-
-        implicit none
-
-        integer(4), intent(in) :: nmaxin, mmaxin
-        integer(8)             :: n, m   ! 64 bits to avoid overflow for (m,n) > 60
-
-        nmax0 = nmaxin
-        mmax0 = mmaxin
-
-        if (allocated(anm)) deallocate(anm, bnm, cm, dnm, en, marr, narr)
-        allocate( anm(0:nmax0, 0:mmax0) )
-        allocate( bnm(0:nmax0, 0:mmax0) )
-        allocate( cm(0:mmax0) )
-        allocate( dnm(0:nmax0, 0:mmax0) )
-        allocate( en(0:nmax0) )
-        allocate( marr(0:mmax0) )
-        allocate( narr(0:nmax0) )
-
-        do n = 1, nmax0
-            narr(n) = dble(n)
-            en(n)    = dsqrt(dble(n*(n+1)))
-            anm(n,0) = dsqrt( dble((2*n-1)*(2*n+1)) ) / narr(n)
-            bnm(n,0) = dsqrt( dble((2*n+1)*(n-1)*(n-1)) / dble(2*n-3) ) / narr(n)
-        end do
-        do m = 1, mmax0
-            marr(m) = dble(m)
-            cm(m)    = dsqrt(dble(2*m+1)/dble(2*m*m*(m+1)))
-            do n = m+1, nmax0
-                anm(n,m) = dsqrt( dble((2*n-1)*(2*n+1)*(n-1)) / dble((n-m)*(n+m)*(n+1)) )
-                bnm(n,m) = dsqrt( dble((2*n+1)*(n+m-1)*(n-m-1)*(n-2)*(n-1)) &
-                    / dble((n-m)*(n+m)*(2*n-3)*n*(n+1)) )
-                dnm(n,m) = dsqrt( dble((n-m)*(n+m)*(2*n+1)*(n-1)) / dble((2*n-1)*(n+1)) )
-            end do
-        enddo
-
-        return
-
-    end subroutine initalf
-
-end module alf
-
-!####################################################################################
-! Model Modules
-!####################################################################################
-
-module qwm
-
-    implicit none
-
-    integer(4)                 :: nbf              ! Count of basis terms per model level
-    integer(4)                 :: maxn             ! latitude
-    integer(4)                 :: maxs,maxm,maxl   ! seasonal,stationary,migrating
-    integer(4)                 :: maxo
-
-    integer(4)                 :: p                ! B-splines order, p=4 cubic, p=3 quadratic
-    integer(4)                 :: nlev             ! e.g. Number of B-spline nodes
-    integer(4)                 :: nnode            ! nlev + p
-
-    real(8)                    :: alttns           ! Transition 1
-    real(8)                    :: altsym           ! Transition 2
-    real(8)                    :: altiso           ! Constant Limit
-    real(8)                    :: e1(0:4)
-    real(8)                    :: e2(0:4)
-    real(8),parameter          :: H = 60.0d0
-
-    integer(4),allocatable     :: nb(:)            ! total number of basis functions @ level
-    integer(4),allocatable     :: order(:,:)       ! spectral content @ level
-    real(8),allocatable        :: vnode(:)         ! Vertical Altitude Nodes
-    real(8),allocatable        :: mparm(:,:)       ! Model Parameters
-    real(8),allocatable        :: tparm(:,:)       ! Model Parameters
-
-    real(8)                    :: previous(1:5) = -1.0d32
-    integer(4)                 :: priornb = 0
-
-    real(8),allocatable        :: fs(:,:),fm(:,:),fl(:,:)
-    real(8),allocatable        :: bz(:),bm(:)
-
-    real(8),allocatable        :: zwght(:)
-    integer(4)                 :: lev
-
-    integer(4)                 :: cseason = 0
-    integer(4)                 :: cwave = 0
-    integer(4)                 :: ctide = 0
-
-    logical                    :: content(5) = .true.          ! Season/Waves/Tides
-    logical                    :: component(0:1) = .true.      ! Compute zonal/meridional
-
-    character(128)             :: qwmdefault = 'hwm123114.bin'
-    logical                    :: qwminit = .true.
-
-    real(8)                    :: wavefactor(4) = 1.0
-    real(8)                    :: tidefactor(4) = 1.0
-
-end module qwm
-
-module dwm
-
-    implicit none
-
-    integer(4)                 :: nterm             ! Number of terms in the model
-    integer(4)                 :: nmax,mmax         ! Max latitudinal degree
-    integer(4)                 :: nvshterm          ! # of VSH basis functions
-
-    integer(4),allocatable     :: termarr(:,:)      ! 3 x nterm index of coupled terms
-    real(4),allocatable        :: coeff(:)          ! Model coefficients
-    real(4),allocatable        :: vshterms(:,:)     ! VSH basis values
-    real(4),allocatable        :: termval(:,:)      ! Term values to which coefficients are applied
-    real(8),allocatable        :: dpbar(:,:)        ! Associated lengendre fns
-    real(8),allocatable        :: dvbar(:,:)
-    real(8),allocatable        :: dwbar(:,:)
-    real(8),allocatable        :: mltterms(:,:)     ! MLT Fourier terms
-    real(4)                    :: twidth            ! Transition width of high-lat mask
-
-    real(8), parameter         :: pi=3.1415926535897932
-    real(8), parameter         :: dtor=pi/180.d0
-
-    logical                    :: dwminit = .true.
-    character(128), parameter  :: dwmdefault = 'dwm07b104i.dat'
-
-end module dwm
 
 subroutine inithwm()
 
@@ -328,6 +121,8 @@ subroutine initqwm(filename)
 
     use qwm
     use hwm,only:omaxhwm,nmaxhwm
+    use hwm14_utilities, only: findandopen
+
     implicit none
 
     character(128),intent(in)      :: filename
@@ -547,8 +342,8 @@ subroutine hwmqt(IYD,SEC,ALT,GLAT,GLON,STL,F107A,F107,AP,W)
         AA = input(1)*twoPi/365.25d0
         do s = 0,MAXS
             BB = dble(s)*AA
-            fs(s,1) = dcos(BB)
-            fs(s,2) = dsin(BB)
+            fs(s,1) = cos(BB)
+            fs(s,2) = sin(BB)
         enddo
         refresh(1:5) = .true.
         previous(1) = input(1)
@@ -561,8 +356,8 @@ subroutine hwmqt(IYD,SEC,ALT,GLAT,GLON,STL,F107A,F107,AP,W)
         BB = AA*twoPi/24.d0
         do l = 0,MAXL
             CC = dble(l)*BB
-            fl(l,1) = dcos(CC)
-            fl(l,2) = dsin(CC)
+            fl(l,1) = cos(CC)
+            fl(l,2) = sin(CC)
         enddo
         refresh(3) = .true.   ! tides
         previous(2) = input(2)
@@ -574,8 +369,8 @@ subroutine hwmqt(IYD,SEC,ALT,GLAT,GLON,STL,F107A,F107,AP,W)
         AA = input(3)*deg2rad
         do m = 0,MAXM
             BB = dble(m)*AA
-            fm(m,1) = dcos(BB)
-            fm(m,2) = dsin(BB)
+            fm(m,1) = cos(BB)
+            fm(m,2) = sin(BB)
         enddo
         refresh(2) = .true.   ! stationary planetary waves
         previous(3) = input(3)
@@ -637,15 +432,15 @@ subroutine hwmqt(IYD,SEC,ALT,GLAT,GLON,STL,F107A,F107,AP,W)
 
         if (refresh(1) .and. content(1)) then
             do n = 1,amaxn               ! s = 0
-                bz(c) = -dsin(n*theta)   !
-                bz(c+1) = dsin(n*theta)
+                bz(c) = -sin(n*theta)   !
+                bz(c+1) = sin(n*theta)
                 c = c + 2
             enddo
             do s = 1,amaxs                   ! Seasonal variations
                 cs = fs(s,1)
                 ss = fs(s,2)
                 do n = 1,amaxn
-                    sc = dsin(n*theta)
+                    sc = sin(n*theta)
                     bz(c) = -sc*cs   ! Cr     A
                     bz(c+1) = sc*ss  ! Ci     B
                     bz(c+2) = sc*cs
@@ -749,8 +544,8 @@ subroutine hwmqt(IYD,SEC,ALT,GLAT,GLON,STL,F107A,F107,AP,W)
 
     enddo
 
-    w(1) = sngl(v)
-    w(2) = sngl(u)
+    w(1) = real(v)
+    w(2) = real(u)
 
     return
 
@@ -910,6 +705,8 @@ subroutine initdwm(nmaxout,mmaxout)
 
     use hwm
     use dwm
+    use hwm14_utilities, only: findandopen
+
     implicit none
 
     integer(4),intent(out)     :: nmaxout, mmaxout
@@ -960,8 +757,6 @@ subroutine dwm07(IYD,SEC,ALT,GLAT,GLON,AP,DW)
     real(4), save           :: glatlast=1.0e16, glonlast=1.0e16
     real(4), save           :: daylast=1.0e16, utlast=1.0e16, aplast=1.0e16
     real(4), parameter      :: talt=125.0 !, twidth=5.0
-
-    real(4), external       :: ap2kp, mltcalc
 
     !CONVERT AP TO KP
     if (ap(2) .ne. aplast) then
@@ -1023,8 +818,6 @@ subroutine dwm07b(mlt, mlat, kp, mmpwind, mzpwind)
     real(4),save              :: mltlast=1.e16, mlatlast=1.e16, kplast=1.e16
     real(8)                   :: theta, phi, mphi
 
-    real(4),external          :: latwgt2
-
     !LOAD MODEL PARAMETERS IF NECESSARY
     if (dwminit) call initdwm(nmaxdwm, mmaxdwm)
 
@@ -1039,8 +832,8 @@ subroutine dwm07b(mlt, mlat, kp, mmpwind, mzpwind)
         phi = dble(mlt)*dtor*15.d0
         do m = 0, mmax
             mphi = dble(m)*phi
-            mltterms(m,0) = dcos(mphi)
-            mltterms(m,1) = dsin(mphi)
+            mltterms(m,0) = cos(mphi)
+            mltterms(m,1) = sin(mphi)
         enddo
     endif
 
@@ -1048,17 +841,17 @@ subroutine dwm07b(mlt, mlat, kp, mmpwind, mzpwind)
     if ((mlat .ne. mlatlast) .or. (mlt .ne. mltlast)) then
         ivshterm = 0
         do n = 1, nmax
-            vshterms(0,ivshterm)   = -sngl(dvbar(n,0)*mltterms(0,0))
-            vshterms(0,ivshterm+1) =  sngl(dwbar(n,0)*mltterms(0,0))
+            vshterms(0,ivshterm)   = -real(dvbar(n,0)*mltterms(0,0))
+            vshterms(0,ivshterm+1) =  real(dwbar(n,0)*mltterms(0,0))
             vshterms(1,ivshterm)   = -vshterms(0,ivshterm+1)
             vshterms(1,ivshterm+1) =  vshterms(0,ivshterm)
             ivshterm = ivshterm + 2
             do m = 1, mmax
                 if (m .gt. n) cycle
-                vshterms(0,ivshterm)   = -sngl(dvbar(n,m)*mltterms(m,0))
-                vshterms(0,ivshterm+1) =  sngl(dvbar(n,m)*mltterms(m,1))
-                vshterms(0,ivshterm+2) =  sngl(dwbar(n,m)*mltterms(m,1))
-                vshterms(0,ivshterm+3) =  sngl(dwbar(n,m)*mltterms(m,0))
+                vshterms(0,ivshterm)   = -real(dvbar(n,m)*mltterms(m,0))
+                vshterms(0,ivshterm+1) =  real(dvbar(n,m)*mltterms(m,1))
+                vshterms(0,ivshterm+2) =  real(dwbar(n,m)*mltterms(m,1))
+                vshterms(0,ivshterm+3) =  real(dwbar(n,m)*mltterms(m,0))
                 vshterms(1,ivshterm)   = -vshterms(0,ivshterm+2)
                 vshterms(1,ivshterm+1) = -vshterms(0,ivshterm+3)
                 vshterms(1,ivshterm+2) =  vshterms(0,ivshterm)
@@ -1131,85 +924,6 @@ function ap2kp(ap0)
 
 end function ap2kp
 
-! ########################################################################
-!     Geographic <=> Geomagnetic Coordinate Transformations
-!
-!  Converts geodetic coordinates to Quasi-Dipole coordinates (Richmond, J. Geomag.
-!  Geoelec., 1995, p. 191), using a spherical harmonic representation.
-!
-! ########################################################################
-
-module gd2qdc
-
-    implicit none
-
-    integer(4)               :: nterm, nmax, mmax  !Spherical harmonic expansion parameters
-
-    real(8), allocatable     :: coeff(:,:)         !Coefficients for spherical harmonic expansion
-    real(8), allocatable     :: xcoeff(:)          !Coefficients for x coordinate
-    real(8), allocatable     :: ycoeff(:)          !Coefficients for y coordinate
-    real(8), allocatable     :: zcoeff(:)          !Coefficients for z coordinate
-    real(8), allocatable     :: sh(:)              !Array to hold spherical harmonic fuctions
-    real(8), allocatable     :: shgradtheta(:)     !Array to hold spherical harmonic gradients
-    real(8), allocatable     :: shgradphi(:)       !Array to hold spherical harmonic gradients
-    real(8), allocatable     :: normadj(:)         !Adjustment to VSH normalization factor
-    real(4)                  :: epoch, alt
-
-    real(8), parameter       :: pi = 3.1415926535897932d0
-    real(8), parameter       :: dtor = pi/180.0d0
-    real(8), parameter       :: sineps = 0.39781868d0
-
-    logical                  :: gd2qdinit = .true.
-
-contains
-
-    subroutine initgd2qd()
-
-        use hwm
-        implicit none
-
-        character(128), parameter   :: datafile='gd2qd.dat'
-        integer(4)                  :: iterm, n
-        integer(4)                  :: j
-
-        call findandopen(datafile,23)
-        read(23) nmax, mmax, nterm, epoch, alt
-        if (allocated(coeff)) then
-            deallocate(coeff,xcoeff,ycoeff,zcoeff,sh,shgradtheta,shgradphi,normadj)
-        endif
-        allocate( coeff(0:nterm-1, 0:2) )
-        read(23) coeff
-        close(23)
-
-        allocate( xcoeff(0:nterm-1) )
-        allocate( ycoeff(0:nterm-1) )
-        allocate( zcoeff(0:nterm-1) )
-        allocate( sh(0:nterm-1) )
-        allocate( shgradtheta(0:nterm-1) )
-        allocate( shgradphi(0:nterm-1) )
-        allocate( normadj(0:nmax) )
-
-        do iterm = 0, nterm-1
-            xcoeff(iterm) = coeff(iterm,0)
-            ycoeff(iterm) = coeff(iterm,1)
-            zcoeff(iterm) = coeff(iterm,2)
-        enddo
-
-        do n = 0, nmax
-            normadj(n) = dsqrt(dble(n*(n+1)))
-        end do
-
-        nmaxqdc = nmax
-        mmaxqdc = mmax
-
-        gd2qdinit = .false.
-
-        return
-
-    end subroutine initgd2qd
-
-end module gd2qdc
-
 subroutine gd2qd(glatin,glon,qlat,qlon,f1e,f1n,f2e,f2n)
 
     use hwm
@@ -1250,8 +964,8 @@ subroutine gd2qd(glatin,glon,qlat,qlon,f1e,f1n,f2e,f2n)
     enddo
     do m = 1, mmax
       mphi = dble(m) * phi
-      cosmphi = dcos(mphi)
-      sinmphi = dsin(mphi)
+      cosmphi = cos(mphi)
+      sinmphi = sin(mphi)
       do n = m, nmax
         sh(i)   = gpbar(n,m) * cosmphi
         sh(i+1) = gpbar(n,m) * sinmphi
@@ -1267,13 +981,13 @@ subroutine gd2qd(glatin,glon,qlat,qlon,f1e,f1n,f2e,f2n)
     y = dot_product(sh, ycoeff)
     z = dot_product(sh, zcoeff)
 
-    qlonrad = datan2(y,x)
-    cosqlon = dcos(qlonrad)
-    sinqlon = dsin(qlonrad)
+    qlonrad = atan2(y,x)
+    cosqlon = cos(qlonrad)
+    sinqlon = sin(qlonrad)
     cosqlat = x*cosqlon + y*sinqlon
 
-    qlat = sngl(datan2(z,cosqlat) / dtor)
-    qlon = sngl(qlonrad / dtor)
+    qlat = real(atan2(z,cosqlat) / dtor)
+    qlon = real(qlonrad / dtor)
 
     xgradtheta = dot_product(shgradtheta, xcoeff)
     ygradtheta = dot_product(shgradtheta, ycoeff)
@@ -1283,10 +997,10 @@ subroutine gd2qd(glatin,glon,qlat,qlon,f1e,f1n,f2e,f2n)
     ygradphi = dot_product(shgradphi, ycoeff)
     zgradphi = dot_product(shgradphi, zcoeff)
 
-    f1e = sngl(-zgradtheta*cosqlat + (xgradtheta*cosqlon + ygradtheta*sinqlon)*z )
-    f1n = sngl(-zgradphi*cosqlat   + (xgradphi*cosqlon   + ygradphi*sinqlon)*z )
-    f2e = sngl( ygradtheta*cosqlon - xgradtheta*sinqlon )
-    f2n = sngl( ygradphi*cosqlon   - xgradphi*sinqlon )
+    f1e = real(-zgradtheta*cosqlat + (xgradtheta*cosqlon + ygradtheta*sinqlon)*z )
+    f1n = real(-zgradphi*cosqlat   + (xgradphi*cosqlon   + ygradphi*sinqlon)*z )
+    f2e = real( ygradtheta*cosqlon - xgradtheta*sinqlon )
+    f2n = real( ygradphi*cosqlon   - xgradphi*sinqlon )
 
     return
 
@@ -1332,8 +1046,8 @@ function mltcalc(qlat,qlon,day,ut)
     enddo
     do m = 1, mmax
       mphi = dble(m) * phi
-      cosmphi = dcos(mphi)
-      sinmphi = dsin(mphi)
+      cosmphi = cos(mphi)
+      sinmphi = sin(mphi)
       do n = m, nmax
         sh(i)   = spbar(n,m) * cosmphi
         sh(i+1) = spbar(n,m) * sinmphi
@@ -1342,7 +1056,7 @@ function mltcalc(qlat,qlon,day,ut)
     enddo
     x = dot_product(sh, xcoeff)
     y = dot_product(sh, ycoeff)
-    asunqlon = sngl(datan2(y,x) / dtor)
+    asunqlon = real(atan2(y,x) / dtor)
 
     !COMPUTE MLT
     mltcalc = (qlon - asunqlon) / 15.0
@@ -1419,56 +1133,4 @@ function latwgt2(mlat, mlt, kp0, twidth)
 
 end function latwgt2
 
-! ========================================================================
-! Utility to find and open the supporting data files
-! ========================================================================
-
-subroutine findandopen(datafile,unitid)
-
-    implicit none
-
-    character(128)      :: datafile
-    integer             :: unitid
-    character(128)      :: hwmpath
-    logical             :: havefile
-    integer             :: i
-
-    i = index(datafile,'bin')
-    if (i .eq. 0) then
-        inquire(file=trim(datafile),exist=havefile)
-        if (havefile) open(unit=unitid,file=trim(datafile),status='old',form='unformatted')
-        if (.not. havefile) then
-            call get_environment_variable('HWMPATH',hwmpath)
-            inquire(file=trim(hwmpath)//'/'//trim(datafile),exist=havefile)
-            if (havefile) open(unit=unitid, &
-                file=trim(hwmpath)//'/'//trim(datafile),status='old',form='unformatted')
-        endif
-        if (.not. havefile) then
-            inquire(file='../Meta/'//trim(datafile),exist=havefile)
-            if (havefile) open(unit=unitid, &
-                file='../Meta/'//trim(datafile),status='old',form='unformatted')
-        endif
-    else
-        inquire(file=trim(datafile),exist=havefile)
-        if (havefile) open(unit=unitid,file=trim(datafile),status='old',access='stream')
-        if (.not. havefile) then
-            call get_environment_variable('HWMPATH',hwmpath)
-            inquire(file=trim(hwmpath)//'/'//trim(datafile),exist=havefile)
-            if (havefile) open(unit=unitid, &
-                file=trim(hwmpath)//'/'//trim(datafile),status='old',access='stream')
-        endif
-        if (.not. havefile) then
-            inquire(file='../Meta/'//trim(datafile),exist=havefile)
-            if (havefile) open(unit=unitid, &
-                file='../Meta/'//trim(datafile),status='old',access='stream')
-        endif
-    endif
-
-    if (havefile) then
-        return
-    else
-        print *,"Can not find file ",trim(datafile)
-        stop
-    endif
-
-end subroutine findandopen
+end module hwm14_module

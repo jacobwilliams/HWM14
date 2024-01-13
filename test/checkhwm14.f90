@@ -1,4 +1,4 @@
-!
+!>
 !  Test driver for HWM14 subroutines
 !  The output of the program is given at the end of the file
 !
@@ -8,10 +8,10 @@
 !
 !  DATE
 !    6 January 2015 (Updated)
-!
-!******************************************************************************
 
 program checkhwm14
+
+  use hwm14_module
 
   implicit none
 
@@ -20,7 +20,6 @@ program checkhwm14
   real(4)            :: w(2), qw(2), dw(2)
   real(4)            :: mlt, mlat, kp, mmpwind, mzpwind
   real(4)            :: ut, apqt(2)
-  real(4),external   :: pershift
   integer            :: day
   integer            :: ialt,istl,ilat,ilon,iaptemp
   integer            :: imlat,imlt,ikp
@@ -221,46 +220,48 @@ program checkhwm14
   print *
   print *
 
+  contains
+
+  !******************************************************************************
+  !
+  !PERSHIFT
+  !JOHN EMMERT   9/12/03
+  !TRANSLATED TO FORTRAN-90 10/4/06. FORTRAN VERSION ONLY ALLOWS SCALAR INPUTS
+  !SHIFTS INPUT VALUES INTO A SPECIFIED PERIODIC INTERVAL
+  !
+  !CALLING SEQUENCE:   Result = PERSHIFT(x, range)
+  !
+  !ARGUMENTS
+  !      x:        The value to be shifted
+  !      perint:   2-element vector containing the start and end values
+  !                of the desired periodic interval.  The periodicity is
+  !                determined by the span of the range.
+  !
+  !ROUTINES USED THAT ARE NOT IN THE STANDARD FORTRAN-90 LIBRARY
+  !      None
+
+  function pershift(x, perint)
+
+    real(4), parameter :: tol=1e-4
+    real(4)            :: x, perint(0:1)
+    real(4)            :: a, span, offset, offset1, pershift
+
+    pershift = x
+    a = perint(0)
+    span = perint(1) - perint(0)
+    if (span .ne. 0) then
+      offset = x-a
+      offset1 = mod(offset,span)
+      if (abs(offset1) .lt. tol) offset1 = 0
+    endif
+    pershift = a + offset1
+    if ((offset .lt. 0) .and. (offset1 .ne. 0)) pershift = pershift + span
+
+    return
+
+  end function pershift
+
 end program checkhwm14
-
-!******************************************************************************
-!
-!PERSHIFT
-!JOHN EMMERT   9/12/03
-!TRANSLATED TO FORTRAN-90 10/4/06. FORTRAN VERSION ONLY ALLOWS SCALAR INPUTS
-!SHIFTS INPUT VALUES INTO A SPECIFIED PERIODIC INTERVAL
-!
-!CALLING SEQUENCE:   Result = PERSHIFT(x, range)
-!
-!ARGUMENTS
-!      x:        The value to be shifted
-!      perint:   2-element vector containing the start and end values
-!                of the desired periodic interval.  The periodicity is
-!                determined by the span of the range.
-!
-!ROUTINES USED THAT ARE NOT IN THE STANDARD FORTRAN-90 LIBRARY
-!      None
-
-function pershift(x, perint)
-
-  real(4), parameter :: tol=1e-4
-  real(4)            :: x, perint(0:1)
-  real(4)            :: a, span, offset, offset1, pershift
-
-  pershift = x
-  a = perint(0)
-  span = perint(1) - perint(0)
-  if (span .ne. 0) then
-    offset = x-a
-    offset1 = mod(offset,span)
-    if (abs(offset1) .lt. tol) offset1 = 0
-  endif
-  pershift = a + offset1
-  if ((offset .lt. 0) .and. (offset1 .ne. 0)) pershift = pershift + span
-
-  return
-
-end function pershift
 
 
 !******************************************************************************
